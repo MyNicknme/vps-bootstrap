@@ -152,6 +152,7 @@ install_tool vps-open-port
 install_tool vps-close-port
 install_tool vps-version
 install_tool vps-self-update
+install_tool vps-reality
 
 vps-reload-fw
 
