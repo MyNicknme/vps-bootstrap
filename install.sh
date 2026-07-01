@@ -139,6 +139,7 @@ install_tool() {
   fi
 }
 
+install_tool vps
 install_tool vps-status
 install_tool vps-update
 install_tool vps-check
