@@ -1,0 +1,8 @@
+# VPS Bootstrap
+
+Базовая подготовка Debian VPS перед установкой 3x-ui, Hysteria2, AmneziaWG, WireGuard и других VPN-сервисов.
+
+## Быстрая установка
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/YOUR_USERNAME/vps-bootstrap/main/install.sh)
