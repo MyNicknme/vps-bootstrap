@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+
+CONFIG="/etc/vps-bootstrap/config.conf"
+
+[[ -f "$CONFIG" ]] && source "$CONFIG"
+
+echo "========================================="
+echo " VPS Bootstrap Toolkit"
+echo "========================================="
+echo
+echo "Version : ${TOOLKIT_VERSION:-unknown}"
+echo "Repo    : ${GITHUB_REPO:-unknown}"
+echo
+echo "========================================="
