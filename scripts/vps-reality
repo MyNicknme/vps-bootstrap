@@ -24,25 +24,47 @@ install_scanner() {
 
   arch="$(uname -m)"
 
-case "$arch" in
-  x86_64|amd64)
-    file="RealiTLScanner-linux-amd64"
-    ;;
-  aarch64|arm64)
-    file="RealiTLScanner-linux-arm64"
-    ;;
-  *)
-    echo "Unsupported architecture: $arch"
+  case "$arch" in
+    x86_64|amd64)
+      pattern="linux.*amd64|amd64.*linux|linux.*64"
+      ;;
+    aarch64|arm64)
+      pattern="linux.*arm64|arm64.*linux"
+      ;;
+    *)
+      echo "Unsupported architecture: $arch"
+      exit 1
+      ;;
+  esac
+
+  echo "Finding latest RealiTLScanner release..."
+
+  url="$(
+    curl -fsSL --connect-timeout 10 --max-time 30 \
+      https://api.github.com/repos/XTLS/RealiTLScanner/releases/latest |
+    jq -r --arg pattern "$pattern" '
+      .assets[]
+      | select(.name | test($pattern; "i"))
+      | .browser_download_url
+    ' | head -n1
+  )"
+
+  if [[ -z "$url" || "$url" == "null" ]]; then
+    echo "Could not find suitable RealiTLScanner binary"
     exit 1
-    ;;
-esac
+  fi
 
-  url="https://github.com/XTLS/RealiTLScanner/releases/download/${VERSION}/${file}"
+  echo "Downloading:"
+  echo "$url"
 
-  echo "Downloading RealiTLScanner ${VERSION}..."
-  curl -L --connect-timeout 10 --max-time 120 "$url" -o "$BIN"
-
+  curl -fL --connect-timeout 10 --max-time 120 "$url" -o "$BIN"
   chmod +x "$BIN"
+
+  if ! file "$BIN" | grep -q "ELF"; then
+    echo "Downloaded file is not a Linux binary:"
+    file "$BIN"
+    exit 1
+  fi
 
   echo "Installed:"
   "$BIN" -h || true
