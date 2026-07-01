@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+echo "==> Updating package lists"
+apt update
+
+echo "==> Upgrading packages"
+DEBIAN_FRONTEND=noninteractive apt -y upgrade
+
+echo "==> Cleaning packages"
+apt -y autoremove
+apt -y autoclean
+
+echo
+if [[ -f /var/run/reboot-required ]]; then
+  echo "Reboot required: Yes"
+else
+  echo "Reboot required: No"
+fi
+
+echo "Done."
