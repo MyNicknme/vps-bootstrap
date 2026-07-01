@@ -1,0 +1,124 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+INSTALL_DIR="/opt/realitlscanner"
+BIN="/usr/local/bin/RealiTLScanner"
+VERSION="v0.2.3"
+
+show_help() {
+cat <<EOF
+Usage:
+  vps reality install-scanner
+  vps reality scan IP_OR_CIDR
+  vps reality scan-current
+
+Examples:
+  vps reality install-scanner
+  vps reality scan 50.114.113.96/24
+  vps reality scan-current
+EOF
+}
+
+install_scanner() {
+  mkdir -p "$INSTALL_DIR"
+
+  arch="$(uname -m)"
+
+  case "$arch" in
+    x86_64|amd64)
+      file="RealiTLScanner-linux-64"
+      ;;
+    aarch64|arm64)
+      file="RealiTLScanner-linux-arm64"
+      ;;
+    *)
+      echo "Unsupported architecture: $arch"
+      exit 1
+      ;;
+  esac
+
+  url="https://github.com/XTLS/RealiTLScanner/releases/download/${VERSION}/${file}"
+
+  echo "Downloading RealiTLScanner ${VERSION}..."
+  curl -L --connect-timeout 10 --max-time 120 "$url" -o "$BIN"
+
+  chmod +x "$BIN"
+
+  echo "Installed:"
+  "$BIN" -h || true
+}
+
+scan_target() {
+  target="${1:-}"
+
+  if [[ -z "$target" ]]; then
+    echo "Target is required"
+    echo
+    show_help
+    exit 1
+  fi
+
+  if [[ ! -x "$BIN" ]]; then
+    echo "RealiTLScanner is not installed."
+    echo "Run:"
+    echo "  vps reality install-scanner"
+    exit 1
+  fi
+
+  mkdir -p /root/reality-scans
+
+  ts="$(date +%Y%m%d-%H%M%S)"
+  out="/root/reality-scans/scan-${ts}.csv"
+
+  echo "Scanning: $target"
+  echo "Output: $out"
+  echo
+
+  "$BIN" -addr "$target" -out "$out"
+
+  echo
+  echo "Done."
+  echo "Result saved to:"
+  echo "$out"
+}
+
+scan_current() {
+  ip="$(curl -4 -s --max-time 5 ifconfig.me)"
+
+  if [[ -z "$ip" ]]; then
+    echo "Unable to detect public IPv4"
+    exit 1
+  fi
+
+  base="$(echo "$ip" | awk -F. '{print $1"."$2"."$3".0/24"}')"
+
+  scan_target "$base"
+}
+
+cmd="${1:-help}"
+
+case "$cmd" in
+  install-scanner)
+    install_scanner
+    ;;
+
+  scan)
+    shift
+    scan_target "${1:-}"
+    ;;
+
+  scan-current)
+    scan_current
+    ;;
+
+  help|-h|--help)
+    show_help
+    ;;
+
+  *)
+    echo "Unknown reality command: $cmd"
+    echo
+    show_help
+    exit 1
+    ;;
+esac
