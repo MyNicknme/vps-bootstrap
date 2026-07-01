@@ -1,16 +1,19 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+REPO_URL="https://raw.githubusercontent.com/MyNicknme/vps-bootstrap/main"
+
 SSH_PORT="${SSH_PORT:-22}"
 ALLOW_3XUI_PORT="${ALLOW_3XUI_PORT:-2053}"
 ALLOW_HY2_PORT="${ALLOW_HY2_PORT:-443}"
 ALLOW_AWG_PORT="${ALLOW_AWG_PORT:-59567}"
-ENABLE_BBR="${ENABLE_BBR:-yes}"
 
 if [[ $EUID -ne 0 ]]; then
   echo "Run as root"
   exit 1
 fi
+
+echo "==> VPS Bootstrap started"
 
 echo "==> Updating system"
 apt update
@@ -28,7 +31,6 @@ echo "==> Enabling nftables"
 systemctl enable --now nftables
 
 echo "==> Writing nftables firewall"
-
 cat > /etc/nftables.conf <<EOF
 #!/usr/sbin/nft -f
 
@@ -49,7 +51,7 @@ table inet filter {
 
         tcp dport ${SSH_PORT} accept
 
-        # 3x-ui / panel / optional web panel
+        # 3x-ui panel / custom TCP port
         tcp dport ${ALLOW_3XUI_PORT} accept
 
         # Hysteria2
@@ -58,7 +60,7 @@ table inet filter {
         # AmneziaWG / WireGuard
         udp dport ${ALLOW_AWG_PORT} accept
 
-        # Optional: HTTP/HTTPS for certbot, x-ui, fallback sites
+        # HTTP/HTTPS for certificates, panels, fallback sites
         tcp dport { 80, 443 } accept
 
         counter drop
@@ -80,7 +82,6 @@ nft -f /etc/nftables.conf
 systemctl restart nftables
 
 echo "==> Configuring Fail2Ban"
-
 cat > /etc/fail2ban/jail.local <<EOF
 [DEFAULT]
 bantime = 1h
@@ -102,7 +103,6 @@ systemctl enable --now fail2ban
 systemctl restart fail2ban
 
 echo "==> Applying sysctl tuning"
-
 cat > /etc/sysctl.d/99-vps-bootstrap.conf <<EOF
 net.ipv4.ip_forward = 1
 net.ipv6.conf.all.forwarding = 1
@@ -125,46 +125,16 @@ EOF
 
 sysctl --system >/dev/null
 
-echo "==> Creating vps-status command"
-
-cat > /usr/local/bin/vps-status <<'EOF'
-#!/usr/bin/env bash
-
-echo "===== SYSTEM ====="
-hostnamectl
-echo
-
-echo "===== IP ====="
-curl -4 -s ifconfig.me || true
-echo
-curl -6 -s ifconfig.me || true
-echo
-
-echo "===== SERVICES ====="
-systemctl --no-pager --type=service --state=running | grep -E 'ssh|fail2ban|nft|x-ui|hysteria|wg|amnezia' || true
-echo
-
-echo "===== FIREWALL ====="
-nft list ruleset
-echo
-
-echo "===== FAIL2BAN ====="
-fail2ban-client status sshd || true
-echo
-
-echo "===== PORTS ====="
-ss -tulpen
-EOF
-
+echo "==> Installing VPS Toolkit commands"
+curl -fsSL "${REPO_URL}/scripts/vps-status" -o /usr/local/bin/vps-status
 chmod +x /usr/local/bin/vps-status
 
-echo "==> Done"
+echo "==> VPS Bootstrap completed"
 echo
-echo "VPS bootstrap completed."
-echo "SSH port: ${SSH_PORT}/tcp"
-echo "3x-ui port: ${ALLOW_3XUI_PORT}/tcp"
-echo "Hysteria2 port: ${ALLOW_HY2_PORT}/udp"
-echo "AmneziaWG/WireGuard port: ${ALLOW_AWG_PORT}/udp"
+echo "SSH port              : ${SSH_PORT}/tcp"
+echo "3x-ui port            : ${ALLOW_3XUI_PORT}/tcp"
+echo "Hysteria2 port        : ${ALLOW_HY2_PORT}/udp"
+echo "AmneziaWG/WireGuard   : ${ALLOW_AWG_PORT}/udp"
 echo
-echo "Check status:"
+echo "Check server status:"
 echo "  vps-status"
