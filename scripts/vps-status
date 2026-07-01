@@ -1,140 +1,95 @@
 #!/usr/bin/env bash
-set -Eeuo pipefail
 
-REPO_URL="https://raw.githubusercontent.com/MyNicknme/vps-bootstrap/main"
+green="✔"
+red="✘"
 
-SSH_PORT="${SSH_PORT:-22}"
-ALLOW_3XUI_PORT="${ALLOW_3XUI_PORT:-2053}"
-ALLOW_HY2_PORT="${ALLOW_HY2_PORT:-443}"
-ALLOW_AWG_PORT="${ALLOW_AWG_PORT:-59567}"
+check_service() {
+  if systemctl is-active --quiet "$1"; then
+    echo "$green Running"
+  else
+    echo "$red Not running"
+  fi
+}
 
-if [[ $EUID -ne 0 ]]; then
-  echo "Run as root"
-  exit 1
+check_enabled() {
+  if systemctl is-enabled --quiet "$1"; then
+    echo "$green Enabled"
+  else
+    echo "$red Disabled"
+  fi
+}
+
+public_ipv4=$(curl -4 -s --max-time 3 ifconfig.me || echo "N/A")
+public_ipv6=$(curl -6 -s --max-time 3 ifconfig.me || echo "N/A")
+
+os_name=$(grep PRETTY_NAME /etc/os-release | cut -d= -f2 | tr -d '"')
+kernel=$(uname -r)
+host=$(hostname)
+uptime_info=$(uptime -p)
+
+memory_used=$(free -h | awk '/Mem:/ {print $3}')
+memory_total=$(free -h | awk '/Mem:/ {print $2}')
+
+disk_used=$(df -h / | awk 'NR==2 {print $3}')
+disk_total=$(df -h / | awk 'NR==2 {print $2}')
+
+bbr=$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null)
+ip_forward=$(sysctl -n net.ipv4.ip_forward 2>/dev/null)
+ipv6_forward=$(sysctl -n net.ipv6.conf.all.forwarding 2>/dev/null)
+
+echo "========================================="
+echo " VPS Bootstrap Status"
+echo "========================================="
+echo
+echo "Hostname      : $host"
+echo "OS            : $os_name"
+echo "Kernel        : $kernel"
+echo "Uptime        : $uptime_info"
+echo
+echo "Memory        : $memory_used / $memory_total"
+echo "Disk          : $disk_used / $disk_total"
+echo
+echo "-----------------------------------------"
+echo "Public IPv4   : $public_ipv4"
+echo "Public IPv6   : $public_ipv6"
+echo
+echo "-----------------------------------------"
+echo "Firewall      : $(check_service nftables)"
+echo "Fail2Ban      : $(check_service fail2ban)"
+echo "SSH           : $(check_service ssh)"
+echo
+echo "nftables boot : $(check_enabled nftables)"
+echo "Fail2Ban boot : $(check_enabled fail2ban)"
+echo
+echo "-----------------------------------------"
+
+[[ "$bbr" == "bbr" ]] && echo "TCP BBR       : $green Enabled" || echo "TCP BBR       : $red Disabled"
+[[ "$ip_forward" == "1" ]] && echo "IP Forward    : $green Enabled" || echo "IP Forward    : $red Disabled"
+[[ "$ipv6_forward" == "1" ]] && echo "IPv6 Forward  : $green Enabled" || echo "IPv6 Forward  : $red Disabled"
+
+echo
+echo "-----------------------------------------"
+echo "Listening TCP ports:"
+ss -tuln | awk '/tcp/ {print $5}' | sed 's/.*://' | sort -n | uniq
+
+echo
+echo "Listening UDP ports:"
+ss -tuln | awk '/udp/ {print $5}' | sed 's/.*://' | sort -n | uniq
+
+echo
+echo "-----------------------------------------"
+echo "Fail2Ban:"
+fail2ban-client status sshd 2>/dev/null || echo "sshd jail not active"
+
+echo
+echo "-----------------------------------------"
+if [[ -f /var/run/reboot-required ]]; then
+  echo "Reboot required: Yes"
+else
+  echo "Reboot required: No"
 fi
 
-echo "==> VPS Bootstrap started"
-
-echo "==> Updating system"
-apt update
-DEBIAN_FRONTEND=noninteractive apt -y upgrade
-
-echo "==> Installing packages"
-apt install -y \
-  curl wget git nano vim htop ncdu unzip zip tar \
-  ca-certificates gnupg lsb-release \
-  nftables fail2ban cron logrotate \
-  traceroute mtr-tiny dnsutils net-tools iproute2 \
-  jq qrencode
-
-echo "==> Enabling nftables"
-systemctl enable --now nftables
-
-echo "==> Writing nftables firewall"
-cat > /etc/nftables.conf <<EOF
-#!/usr/sbin/nft -f
-
-flush ruleset
-
-table inet filter {
-    chain input {
-        type filter hook input priority 0;
-        policy drop;
-
-        iif "lo" accept
-
-        ct state established,related accept
-        ct state invalid drop
-
-        ip protocol icmp accept
-        ip6 nexthdr ipv6-icmp accept
-
-        tcp dport ${SSH_PORT} accept
-
-        # 3x-ui panel / custom TCP port
-        tcp dport ${ALLOW_3XUI_PORT} accept
-
-        # Hysteria2
-        udp dport ${ALLOW_HY2_PORT} accept
-
-        # AmneziaWG / WireGuard
-        udp dport ${ALLOW_AWG_PORT} accept
-
-        # HTTP/HTTPS for certificates, panels, fallback sites
-        tcp dport { 80, 443 } accept
-
-        counter drop
-    }
-
-    chain forward {
-        type filter hook forward priority 0;
-        policy accept;
-    }
-
-    chain output {
-        type filter hook output priority 0;
-        policy accept;
-    }
-}
-EOF
-
-nft -f /etc/nftables.conf
-systemctl restart nftables
-
-echo "==> Configuring Fail2Ban"
-cat > /etc/fail2ban/jail.local <<EOF
-[DEFAULT]
-bantime = 1h
-findtime = 10m
-maxretry = 5
-backend = systemd
-banaction = nftables-multiport
-
-[sshd]
-enabled = true
-port = ${SSH_PORT}
-filter = sshd
-logpath = %(sshd_log)s
-maxretry = 4
-bantime = 6h
-EOF
-
-systemctl enable --now fail2ban
-systemctl restart fail2ban
-
-echo "==> Applying sysctl tuning"
-cat > /etc/sysctl.d/99-vps-bootstrap.conf <<EOF
-net.ipv4.ip_forward = 1
-net.ipv6.conf.all.forwarding = 1
-
-net.ipv4.tcp_syncookies = 1
-net.ipv4.conf.all.rp_filter = 1
-net.ipv4.conf.default.rp_filter = 1
-
-net.ipv4.conf.all.accept_redirects = 0
-net.ipv4.conf.default.accept_redirects = 0
-net.ipv6.conf.all.accept_redirects = 0
-net.ipv6.conf.default.accept_redirects = 0
-
-net.ipv4.conf.all.send_redirects = 0
-net.ipv4.conf.default.send_redirects = 0
-
-net.core.default_qdisc = fq
-net.ipv4.tcp_congestion_control = bbr
-EOF
-
-sysctl --system >/dev/null
-
-echo "==> Installing VPS Toolkit commands"
-curl -fsSL "${REPO_URL}/scripts/vps-status" -o /usr/local/bin/vps-status
-chmod +x /usr/local/bin/vps-status
-
-echo "==> VPS Bootstrap completed"
 echo
-echo "SSH port              : ${SSH_PORT}/tcp"
-echo "3x-ui port            : ${ALLOW_3XUI_PORT}/tcp"
-echo "Hysteria2 port        : ${ALLOW_HY2_PORT}/udp"
-echo "AmneziaWG/WireGuard   : ${ALLOW_AWG_PORT}/udp"
-echo
-echo "Check server status:"
-echo "  vps-status"
+echo "========================================="
+echo " VPS READY FOR VPN INSTALLATION"
+echo "========================================="
