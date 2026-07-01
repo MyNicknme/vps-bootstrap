@@ -5,4 +5,4 @@
 ## Быстрая установка
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/YOUR_USERNAME/vps-bootstrap/main/install.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/MyNicknme/vps-bootstrap/main/install.sh)
