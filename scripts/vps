@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+VERSION="1.0"
+
+show_help() {
+cat <<EOF
+=========================================
+ VPS Bootstrap Toolkit v${VERSION}
+=========================================
+
+Usage:
+  vps COMMAND [OPTIONS]
+
+System:
+  vps status              Show server status
+  vps check               Run health check
+  vps update              Update system packages
+
+Firewall:
+  vps open-port PORT tcp|udp [name]
+                          Open TCP/UDP port
+
+  vps close-port PORT tcp|udp
+                          Close TCP/UDP port
+
+  vps reload-fw           Reload nftables firewall
+
+Direct commands:
+  vps-status
+  vps-check
+  vps-update
+  vps-open-port
+  vps-close-port
+  vps-reload-fw
+
+Examples:
+  vps status
+  vps check
+  vps update
+  vps open-port 8443 tcp x-ui
+  vps open-port 51820 udp wireguard
+  vps close-port 8443 tcp
+  vps reload-fw
+
+VPN modules:
+  coming soon
+
+=========================================
+EOF
+}
+
+cmd="${1:-help}"
+
+case "$cmd" in
+  help|-h|--help)
+    show_help
+    ;;
+
+  status)
+    exec vps-status
+    ;;
+
+  check)
+    exec vps-check
+    ;;
+
+  update)
+    exec vps-update
+    ;;
+
+  open-port)
+    shift
+    exec vps-open-port "$@"
+    ;;
+
+  close-port)
+    shift
+    exec vps-close-port "$@"
+    ;;
+
+  reload-fw)
+    exec vps-reload-fw
+    ;;
+
+  *)
+    echo "Unknown command: $cmd"
+    echo
+    show_help
+    exit 1
+    ;;
+esac
