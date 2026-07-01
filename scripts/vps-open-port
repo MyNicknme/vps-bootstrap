@@ -31,36 +31,45 @@ if [[ "$PROTO" != "tcp" && "$PROTO" != "udp" ]]; then
   exit 1
 fi
 
-source "$PORTS_CONF"
+if [[ ! -f "$PORTS_CONF" ]]; then
+  echo "Ports config not found: $PORTS_CONF"
+  exit 1
+fi
 
 VAR_NAME="TCP_PORTS"
 [[ "$PROTO" == "udp" ]] && VAR_NAME="UDP_PORTS"
 
-CURRENT="${!VAR_NAME}"
+python3 - "$PORTS_CONF" "$VAR_NAME" "$PORT" "$NAME" <<'PY'
+import sys
+import re
 
-if echo "$CURRENT" | awk -F: '{print $1}' | grep -qx "$PORT"; then
-  echo "$PROTO/$PORT already exists"
-  exit 0
-fi
+path, var, port, name = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
 
-NEW_LINE="${PORT}:${NAME}"
-
-python3 - "$PORTS_CONF" "$VAR_NAME" "$NEW_LINE" <<'PY'
-import sys, re
-
-path, var, new_line = sys.argv[1], sys.argv[2], sys.argv[3]
-
-text = open(path).read()
+with open(path, "r") as f:
+    text = f.read()
 
 pattern = rf'{var}="\n(.*?)\n"'
+match = re.search(pattern, text, flags=re.S)
 
-def repl(match):
-    body = match.group(1).rstrip()
-    return f'{var}="\\n{body}\\n{new_line}\\n"'
+if not match:
+    print(f"{var} not found")
+    sys.exit(1)
 
-text = re.sub(pattern, repl, text, flags=re.S)
+body = match.group(1)
+lines = [line.strip() for line in body.splitlines() if line.strip()]
 
-open(path, "w").write(text)
+for line in lines:
+    if line.split(":", 1)[0] == port:
+        print(f"{port} already exists")
+        sys.exit(0)
+
+lines.append(f"{port}:{name}")
+
+new_block = var + '="\n' + "\n".join(lines) + '\n"'
+text = re.sub(pattern, new_block, text, flags=re.S)
+
+with open(path, "w") as f:
+    f.write(text)
 PY
 
 vps-reload-fw
