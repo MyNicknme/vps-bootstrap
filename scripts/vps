@@ -32,6 +32,7 @@ Reality:
   vps reality install-scanner
   vps reality scan IP_OR_CIDR
   vps reality scan-current
+  vps reality best IP_OR_CIDR
 
 Direct commands:
   vps-status
@@ -48,6 +49,7 @@ Examples:
   vps open-port 8443 tcp x-ui
   vps open-port 51820 udp wireguard
   vps close-port 8443 tcp
+  vps reality best 50.114.113.96/24
   vps reload-fw
 
 VPN modules:
