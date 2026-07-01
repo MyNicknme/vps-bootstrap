@@ -1,0 +1,138 @@
+#!/usr/bin/env bash
+
+green="✔"
+red="✘"
+warn="⚠"
+
+score=100
+warnings=()
+
+add_warning() {
+  warnings+=("$1")
+  score=$((score - 5))
+}
+
+echo "========================================="
+echo " VPS Health Check"
+echo "========================================="
+echo
+
+# Root check
+if [[ $EUID -ne 0 ]]; then
+  add_warning "Script is not running as root"
+fi
+
+# Services
+systemctl is-active --quiet nftables || add_warning "nftables is not running"
+systemctl is-active --quiet fail2ban || add_warning "Fail2Ban is not running"
+systemctl is-active --quiet ssh || add_warning "SSH service is not running"
+
+systemctl is-enabled --quiet nftables || add_warning "nftables is not enabled on boot"
+systemctl is-enabled --quiet fail2ban || add_warning "Fail2Ban is not enabled on boot"
+
+# Sysctl
+[[ "$(sysctl -n net.ipv4.ip_forward 2>/dev/null)" == "1" ]] || add_warning "IPv4 forwarding is disabled"
+[[ "$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null)" == "bbr" ]] || add_warning "TCP BBR is not enabled"
+
+# SSH config
+sshd_config="/etc/ssh/sshd_config"
+
+if [[ -f "$sshd_config" ]]; then
+  if sshd -T 2>/dev/null | grep -q "^passwordauthentication yes"; then
+    add_warning "SSH password authentication is enabled"
+  fi
+
+  if sshd -T 2>/dev/null | grep -q "^permitrootlogin yes"; then
+    add_warning "Root SSH login with password may be enabled"
+  fi
+else
+  add_warning "sshd_config not found"
+fi
+
+# Reboot
+if [[ -f /var/run/reboot-required ]]; then
+  add_warning "Reboot is required"
+fi
+
+# Disk
+disk_use=$(df / | awk 'NR==2 {print $5}' | tr -d '%')
+if [[ "$disk_use" -ge 85 ]]; then
+  add_warning "Disk usage is high: ${disk_use}%"
+fi
+
+# Memory / swap
+if ! swapon --show | grep -q .; then
+  add_warning "Swap is not configured"
+fi
+
+# GitHub availability
+if ! curl -fsSL --max-time 5 https://raw.githubusercontent.com >/dev/null 2>&1; then
+  add_warning "GitHub raw is not reachable"
+fi
+
+# Time sync
+if command -v timedatectl >/dev/null 2>&1; then
+  if ! timedatectl | grep -q "System clock synchronized: yes"; then
+    add_warning "System clock is not synchronized"
+  fi
+fi
+
+# Output
+echo "Services:"
+systemctl is-active --quiet nftables && echo "  $green nftables running" || echo "  $red nftables not running"
+systemctl is-active --quiet fail2ban && echo "  $green Fail2Ban running" || echo "  $red Fail2Ban not running"
+systemctl is-active --quiet ssh && echo "  $green SSH running" || echo "  $red SSH not running"
+
+echo
+echo "Network:"
+[[ "$(sysctl -n net.ipv4.ip_forward 2>/dev/null)" == "1" ]] && echo "  $green IPv4 forwarding enabled" || echo "  $red IPv4 forwarding disabled"
+[[ "$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null)" == "bbr" ]] && echo "  $green TCP BBR enabled" || echo "  $red TCP BBR disabled"
+
+echo
+echo "Security:"
+if sshd -T 2>/dev/null | grep -q "^passwordauthentication yes"; then
+  echo "  $warn SSH password authentication enabled"
+else
+  echo "  $green SSH password authentication disabled"
+fi
+
+if sshd -T 2>/dev/null | grep -q "^permitrootlogin yes"; then
+  echo "  $warn Root login is fully enabled"
+else
+  echo "  $green Root login is restricted or disabled"
+fi
+
+echo
+echo "System:"
+echo "  Disk usage: ${disk_use}%"
+
+if swapon --show | grep -q .; then
+  echo "  $green Swap configured"
+else
+  echo "  $warn Swap not configured"
+fi
+
+if [[ -f /var/run/reboot-required ]]; then
+  echo "  $warn Reboot required"
+else
+  echo "  $green Reboot not required"
+fi
+
+echo
+echo "-----------------------------------------"
+echo "Health score: ${score}/100"
+echo "-----------------------------------------"
+
+if [[ ${#warnings[@]} -gt 0 ]]; then
+  echo
+  echo "Warnings:"
+  for item in "${warnings[@]}"; do
+    echo "  $warn $item"
+  done
+else
+  echo
+  echo "$green No warnings found"
+fi
+
+echo
+echo "========================================="
