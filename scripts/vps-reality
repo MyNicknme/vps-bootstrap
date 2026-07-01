@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-INSTALL_DIR="/opt/realitlscanner"
 BIN="/usr/local/bin/RealiTLScanner"
-VERSION="v0.2.3"
+SCAN_DIR="/root/reality-scans"
 
 show_help() {
 cat <<EOF
@@ -11,17 +10,17 @@ Usage:
   vps reality install-scanner
   vps reality scan IP_OR_CIDR
   vps reality scan-current
+  vps reality best IP_OR_CIDR
 
 Examples:
   vps reality install-scanner
   vps reality scan 50.114.113.96/24
   vps reality scan-current
+  vps reality best 50.114.113.96/24
 EOF
 }
 
 install_scanner() {
-  mkdir -p "$INSTALL_DIR"
-
   arch="$(uname -m)"
 
   case "$arch" in
@@ -37,7 +36,7 @@ install_scanner() {
       ;;
   esac
 
-  echo "Finding latest RealiTLScanner release..."
+  echo "==> Finding latest RealiTLScanner release"
 
   url="$(
     curl -fsSL --connect-timeout 10 --max-time 30 \
@@ -54,7 +53,7 @@ install_scanner() {
     exit 1
   fi
 
-  echo "Downloading:"
+  echo "==> Downloading"
   echo "$url"
 
   curl -fL --connect-timeout 10 --max-time 120 "$url" -o "$BIN"
@@ -66,8 +65,16 @@ install_scanner() {
     exit 1
   fi
 
-  echo "Installed:"
-  "$BIN" -h || true
+  echo "Installed: $BIN"
+}
+
+ensure_scanner() {
+  if [[ ! -x "$BIN" ]]; then
+    echo "RealiTLScanner is not installed."
+    echo "Run:"
+    echo "  vps reality install-scanner"
+    exit 1
+  fi
 }
 
 scan_target() {
@@ -75,22 +82,15 @@ scan_target() {
 
   if [[ -z "$target" ]]; then
     echo "Target is required"
-    echo
     show_help
     exit 1
   fi
 
-  if [[ ! -x "$BIN" ]]; then
-    echo "RealiTLScanner is not installed."
-    echo "Run:"
-    echo "  vps reality install-scanner"
-    exit 1
-  fi
-
-  mkdir -p /root/reality-scans
+  ensure_scanner
+  mkdir -p "$SCAN_DIR"
 
   ts="$(date +%Y%m%d-%H%M%S)"
-  out="/root/reality-scans/scan-${ts}.csv"
+  out="${SCAN_DIR}/scan-${ts}.csv"
 
   echo "Scanning: $target"
   echo "Output: $out"
@@ -113,8 +113,47 @@ scan_current() {
   fi
 
   base="$(echo "$ip" | awk -F. '{print $1"."$2"."$3".0/24"}')"
-
   scan_target "$base"
+}
+
+best_target() {
+  target="${1:-}"
+
+  if [[ -z "$target" ]]; then
+    echo "Target is required"
+    show_help
+    exit 1
+  fi
+
+  ensure_scanner
+  mkdir -p "$SCAN_DIR"
+
+  ts="$(date +%Y%m%d-%H%M%S)"
+  out="${SCAN_DIR}/best-${ts}.csv"
+
+  echo "Scanning for best Reality candidates:"
+  echo "$target"
+  echo
+  echo "Output: $out"
+  echo
+
+  "$BIN" -addr "$target" -out "$out"
+
+  echo
+  echo "Top results:"
+  echo "-----------------------------------------"
+
+  if [[ ! -s "$out" ]]; then
+    echo "No results found."
+    exit 0
+  fi
+
+  head -n 20 "$out"
+
+  echo
+  echo "-----------------------------------------"
+  echo "Full result saved to:"
+  echo "$out"
 }
 
 cmd="${1:-help}"
@@ -131,6 +170,11 @@ case "$cmd" in
 
   scan-current)
     scan_current
+    ;;
+
+  best)
+    shift
+    best_target "${1:-}"
     ;;
 
   help|-h|--help)
