@@ -115,7 +115,13 @@ EOF
 
 sysctl --system >/dev/null
 
-echo "==> Installing VPS Toolkit commands"
+echo "==> Installing VPS Toolkit"
+
+mkdir -p /etc/vps-bootstrap
+
+curl -fsSL --connect-timeout 10 --max-time 30 \
+  "${REPO_URL}/configs/ports.conf" \
+  -o /etc/vps-bootstrap/ports.conf
 
 install_tool() {
   local name="$1"
@@ -136,6 +142,11 @@ install_tool() {
 install_tool vps-status
 install_tool vps-update
 install_tool vps-check
+install_tool vps-reload-fw
+install_tool vps-open-port
+install_tool vps-close-port
+
+vps-reload-fw
 
 echo
 echo "========================================="
