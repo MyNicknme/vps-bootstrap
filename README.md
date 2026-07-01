@@ -1,63 +1,53 @@
 # 🚀 VPS Bootstrap Toolkit
 
-A lightweight toolkit for preparing a fresh **Debian 13 VPS** before installing VPN services such as:
+A lightweight toolkit for preparing a fresh **Debian 13 VPS** before installing VPN services.
+
+Designed for:
 
 - AmneziaWG
 - WireGuard
 - Hysteria 2
 - 3x-ui
-- Xray / sing-box
+- Xray
+- sing-box
 
-The goal is to provide a consistent, secure and repeatable server configuration with a single command.
+The toolkit performs the initial server configuration and provides convenient management commands for further administration.
 
 ---
 
 # Features
 
-The bootstrap script performs the following tasks:
+✔ System update
 
-- Updates the operating system
-- Installs common administration utilities
-- Installs and configures **Fail2Ban**
-- Configures **nftables firewall**
-- Enables **TCP BBR**
-- Enables IPv4/IPv6 forwarding
-- Applies recommended sysctl parameters
-- Installs VPS Toolkit commands
+✔ Common administration utilities
 
----
+✔ nftables firewall
 
-# Installed Packages
+✔ Fail2Ban
 
-- curl
-- wget
-- git
-- nano
-- vim
-- htop
-- ncdu
-- unzip
-- zip
-- nftables
-- fail2ban
-- jq
-- qrencode
-- traceroute
-- dnsutils
-- net-tools
-- iproute2
+✔ TCP BBR
+
+✔ IPv4 / IPv6 forwarding
+
+✔ System tuning (sysctl)
+
+✔ Firewall management
+
+✔ VPS health monitoring
+
+✔ Toolkit self-update
 
 ---
 
 # Installation
 
-Using **wget** (recommended):
+## Using wget (recommended)
 
 ```bash
 wget -qO- https://raw.githubusercontent.com/MyNicknme/vps-bootstrap/main/install.sh | bash
 ```
 
-or using curl:
+## Using curl
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/MyNicknme/vps-bootstrap/main/install.sh)
@@ -65,22 +55,24 @@ bash <(curl -fsSL https://raw.githubusercontent.com/MyNicknme/vps-bootstrap/main
 
 ---
 
-# Custom Ports
+# Custom Installation
 
 Default ports:
 
 | Service | Port |
 |---------|------|
 | SSH | 22/TCP |
+| HTTP | 80/TCP |
+| HTTPS | 443/TCP |
 | 3x-ui | 2053/TCP |
-| Hysteria 2 | 443/UDP |
+| Hysteria2 | 443/UDP |
 | AmneziaWG | 59567/UDP |
 
-Custom values can be supplied during installation:
+Example:
 
 ```bash
 SSH_PORT=2222 \
-ALLOW_3XUI_PORT=2053 \
+ALLOW_3XUI_PORT=8443 \
 ALLOW_HY2_PORT=8443 \
 ALLOW_AWG_PORT=51820 \
 wget -qO- https://raw.githubusercontent.com/MyNicknme/vps-bootstrap/main/install.sh | bash
@@ -88,64 +80,110 @@ wget -qO- https://raw.githubusercontent.com/MyNicknme/vps-bootstrap/main/install
 
 ---
 
-# VPS Toolkit Commands
+# Commands
 
-## Server Status
+The recommended way to use the toolkit is through the `vps` command.
+
+Show all available commands:
 
 ```bash
-vps-status
+vps
 ```
-
-Shows:
-
-- System information
-- Public IP
-- Memory usage
-- Disk usage
-- Running services
-- Firewall status
-- Fail2Ban status
-- Open TCP/UDP ports
-- BBR status
-- IP Forward status
 
 ---
 
-## Health Check
+## System
+
+Show server status
 
 ```bash
-vps-check
+vps status
 ```
 
-Performs a security audit of the server:
+Run health check
 
-- Firewall
-- Fail2Ban
-- SSH configuration
-- TCP BBR
-- IP Forward
-- Swap
-- Disk usage
-- Pending reboot
+```bash
+vps check
+```
 
-Returns an overall health score and warnings if issues are detected.
+Update Debian
+
+```bash
+vps update
+```
+
+Show Toolkit version
+
+```bash
+vps version
+```
+
+Update Toolkit
+
+```bash
+vps self-update
+```
 
 ---
 
-## System Update
+## Firewall
+
+Open TCP port
 
 ```bash
-vps-update
+vps open-port 8443 tcp x-ui
 ```
 
-Runs:
+Open UDP port
 
-- apt update
-- apt upgrade
-- apt autoremove
-- apt autoclean
+```bash
+vps open-port 51820 udp wireguard
+```
 
-and reports whether a reboot is required.
+Close port
+
+```bash
+vps close-port 8443 tcp
+```
+
+Reload firewall
+
+```bash
+vps reload-fw
+```
+
+---
+
+# Configuration
+
+Toolkit configuration is stored in:
+
+```text
+/etc/vps-bootstrap/
+```
+
+Configuration files:
+
+```text
+config.conf
+ports.conf
+```
+
+Example `ports.conf`:
+
+```ini
+TCP_PORTS="
+22:ssh
+80:http
+443:https
+2053:3x-ui
+"
+
+UDP_PORTS="
+443:hysteria2
+59567:amneziawg
+"
+```
 
 ---
 
@@ -156,34 +194,69 @@ vps-bootstrap
 │
 ├── install.sh
 │
+├── configs
+│   ├── config.conf
+│   └── ports.conf
+│
 ├── scripts
+│   ├── vps
 │   ├── vps-status
 │   ├── vps-check
-│   └── vps-update
-│
-├── configs
+│   ├── vps-update
+│   ├── vps-version
+│   ├── vps-self-update
+│   ├── vps-open-port
+│   ├── vps-close-port
+│   └── vps-reload-fw
 │
 └── README.md
 ```
 
 ---
 
+# Toolkit Commands
+
+| Command | Description |
+|----------|-------------|
+| `vps` | Show help |
+| `vps status` | Server status |
+| `vps check` | Health check |
+| `vps update` | Update Debian packages |
+| `vps version` | Toolkit version |
+| `vps self-update` | Update Toolkit |
+| `vps open-port` | Open TCP/UDP port |
+| `vps close-port` | Close TCP/UDP port |
+| `vps reload-fw` | Reload nftables |
+
+---
+
 # Roadmap
 
-Upcoming features:
+System
 
-- vps-open-port
-- vps-close-port
-- vps-backup
-- vps-restore
+- [ ] Backup
+- [ ] Restore
+- [ ] Scheduled updates
 
-VPN installers:
+Firewall
 
-- AmneziaWG
-- Hysteria 2
-- 3x-ui
+- [ ] Port aliases
+- [ ] Port groups
+- [ ] Import / Export
 
-Automatic backup and restore.
+VPN
+
+- [ ] AmneziaWG installer
+- [ ] Hysteria2 installer
+- [ ] 3x-ui installer
+- [ ] Client management
+
+Monitoring
+
+- [ ] VPS information
+- [ ] Network tests
+- [ ] Speed test
+- [ ] DNS diagnostics
 
 ---
 
