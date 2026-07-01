@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+PORTS_CONF="/etc/vps-bootstrap/ports.conf"
+
+if [[ $EUID -ne 0 ]]; then
+  echo "Run as root"
+  exit 1
+fi
+
+if [[ ! -f "$PORTS_CONF" ]]; then
+  echo "Ports config not found: $PORTS_CONF"
+  exit 1
+fi
+
+source "$PORTS_CONF"
+
+extract_ports() {
+  echo "$1" | awk -F: 'NF {print $1}' | xargs | sed 's/ /,/g'
+}
+
+TCP_LIST=$(extract_ports "$TCP_PORTS")
+UDP_LIST=$(extract_ports "$UDP_PORTS")
+
+cat > /etc/nftables.conf <<EOF
+#!/usr/sbin/nft -f
+
+flush ruleset
+
+table inet filter {
+    chain input {
+        type filter hook input priority 0;
+        policy drop;
+
+        iif "lo" accept
+        ct state established,related accept
+        ct state invalid drop
+
+        ip protocol icmp accept
+        ip6 nexthdr ipv6-icmp accept
+
+        tcp dport { ${TCP_LIST} } accept
+        udp dport { ${UDP_LIST} } accept
+
+        counter drop
+    }
+
+    chain forward {
+        type filter hook forward priority 0;
+        policy accept;
+    }
+
+    chain output {
+        type filter hook output priority 0;
+        policy accept;
+    }
+}
+EOF
+
+nft -c -f /etc/nftables.conf
+nft -f /etc/nftables.conf
+
+systemctl enable --now nftables >/dev/null 2>&1 || true
+
+echo "Firewall reloaded"
