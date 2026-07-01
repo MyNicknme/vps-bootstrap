@@ -1,4 +1,7 @@
-chmod +x scripts/vps-status
-git add .
-git commit -m "Add vps-status script"
-git push
+#!/usr/bin/env bash
+
+green="✔"
+red="✘"
+
+check_service() {
+    ...
