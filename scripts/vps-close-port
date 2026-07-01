@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+PORTS_CONF="/etc/vps-bootstrap/ports.conf"
+
+PORT="${1:-}"
+PROTO="${2:-}"
+
+usage() {
+  echo "Usage:"
+  echo "  vps-close-port PORT tcp|udp"
+  echo
+  echo "Example:"
+  echo "  vps-close-port 8443 tcp"
+  echo "  vps-close-port 51820 udp"
+}
+
+if [[ -z "$PORT" || -z "$PROTO" ]]; then
+  usage
+  exit 1
+fi
+
+if ! [[ "$PORT" =~ ^[0-9]+$ ]] || [[ "$PORT" -lt 1 || "$PORT" -gt 65535 ]]; then
+  echo "Invalid port: $PORT"
+  exit 1
+fi
+
+if [[ "$PROTO" != "tcp" && "$PROTO" != "udp" ]]; then
+  echo "Protocol must be tcp or udp"
+  exit 1
+fi
+
+VAR_NAME="TCP_PORTS"
+[[ "$PROTO" == "udp" ]] && VAR_NAME="UDP_PORTS"
+
+python3 - "$PORTS_CONF" "$VAR_NAME" "$PORT" <<'PY'
+import sys, re
+
+path, var, port = sys.argv[1], sys.argv[2], sys.argv[3]
+
+text = open(path).read()
+
+pattern = rf'{var}="\n(.*?)\n"'
+match = re.search(pattern, text, flags=re.S)
+
+if not match:
+    print(f"{var} not found")
+    sys.exit(1)
+
+lines = []
+removed = False
+
+for line in match.group(1).splitlines():
+    if not line.strip():
+        continue
+    current_port = line.split(":", 1)[0].strip()
+    if current_port == port:
+        removed = True
+        continue
+    lines.append(line)
+
+new_body = "\n".join(lines)
+
+text = re.sub(pattern, f'{var}="\\n{new_body}\\n"', text, flags=re.S)
+
+open(path, "w").write(text)
+
+if not removed:
+    print(f"Port {port} not found")
+PY
+
+vps-reload-fw
+
+echo "Closed $PROTO/$PORT"
