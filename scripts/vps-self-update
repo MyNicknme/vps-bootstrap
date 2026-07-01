@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+CONFIG="/etc/vps-bootstrap/config.conf"
+
+if [[ ! -f "$CONFIG" ]]; then
+  echo "Config not found: $CONFIG"
+  exit 1
+fi
+
+source "$CONFIG"
+
+install_tool() {
+  local name="$1"
+  local url="${REPO_URL}/scripts/${name}"
+
+  echo "Updating ${name}..."
+
+  if curl -fsSL --connect-timeout 10 --max-time 30 "$url" -o "/usr/local/bin/${name}"; then
+    chmod +x "/usr/local/bin/${name}"
+    echo "OK: ${name}"
+  else
+    echo "ERROR: failed to update ${name}"
+    exit 1
+  fi
+}
+
+echo "==> Updating VPS Bootstrap Toolkit"
+
+curl -fsSL --connect-timeout 10 --max-time 30 \
+  "${REPO_URL}/configs/config.conf" \
+  -o /etc/vps-bootstrap/config.conf
+
+source /etc/vps-bootstrap/config.conf
+
+install_tool vps
+install_tool vps-status
+install_tool vps-check
+install_tool vps-update
+install_tool vps-reload-fw
+install_tool vps-open-port
+install_tool vps-close-port
+install_tool vps-version
+install_tool vps-self-update
+
+echo
+echo "Toolkit updated to version: ${TOOLKIT_VERSION}"
