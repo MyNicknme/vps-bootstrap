@@ -11,6 +11,8 @@ cat <<EOF
 
 Usage:
   vps COMMAND [OPTIONS]
+  vps version             Show Toolkit version
+  vps self-update         Update Toolkit scripts
 
 System:
   vps status              Show server status
@@ -55,6 +57,14 @@ cmd="${1:-help}"
 case "$cmd" in
   help|-h|--help)
     show_help
+    ;;
+
+  version)
+    exec vps-version
+    ;;
+
+  self-update)
+    exec vps-self-update
     ;;
 
   status)
