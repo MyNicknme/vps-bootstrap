@@ -34,11 +34,13 @@ VAR_NAME="TCP_PORTS"
 [[ "$PROTO" == "udp" ]] && VAR_NAME="UDP_PORTS"
 
 python3 - "$PORTS_CONF" "$VAR_NAME" "$PORT" <<'PY'
-import sys, re
+import sys
+import re
 
 path, var, port = sys.argv[1], sys.argv[2], sys.argv[3]
 
-text = open(path).read()
+with open(path, "r") as f:
+    text = f.read()
 
 pattern = rf'{var}="\n(.*?)\n"'
 match = re.search(pattern, text, flags=re.S)
@@ -47,26 +49,28 @@ if not match:
     print(f"{var} not found")
     sys.exit(1)
 
-lines = []
+body = match.group(1)
+lines = [line.strip() for line in body.splitlines() if line.strip()]
+
+new_lines = []
 removed = False
 
-for line in match.group(1).splitlines():
-    if not line.strip():
-        continue
-    current_port = line.split(":", 1)[0].strip()
+for line in lines:
+    current_port = line.split(":", 1)[0]
     if current_port == port:
         removed = True
-        continue
-    lines.append(line)
-
-new_body = "\n".join(lines)
-
-text = re.sub(pattern, f'{var}="\\n{new_body}\\n"', text, flags=re.S)
-
-open(path, "w").write(text)
+    else:
+        new_lines.append(line)
 
 if not removed:
     print(f"Port {port} not found")
+    sys.exit(0)
+
+new_block = var + '="\n' + "\n".join(new_lines) + '\n"'
+text = re.sub(pattern, new_block, text, flags=re.S)
+
+with open(path, "w") as f:
+    f.write(text)
 PY
 
 vps-reload-fw
