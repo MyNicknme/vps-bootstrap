@@ -119,9 +119,11 @@ echo "==> Installing VPS Toolkit commands"
 
 curl -fsSL "${REPO_URL}/scripts/vps-status" -o /usr/local/bin/vps-status
 curl -fsSL "${REPO_URL}/scripts/vps-update" -o /usr/local/bin/vps-update
+curl -fsSL "${REPO_URL}/scripts/vps-check" -o /usr/local/bin/vps-check
 
 chmod +x /usr/local/bin/vps-status
 chmod +x /usr/local/bin/vps-update
+chmod +x /usr/local/bin/vps-check
 
 echo
 echo "========================================="
@@ -134,4 +136,5 @@ echo "AmneziaWG/WG port   : ${ALLOW_AWG_PORT}/udp"
 echo
 echo "Check status:"
 echo "  vps-status"
+echo "  vps-check"
 echo
