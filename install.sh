@@ -122,6 +122,10 @@ mkdir -p /etc/vps-bootstrap
 curl -fsSL --connect-timeout 10 --max-time 30 \
   "${REPO_URL}/configs/ports.conf" \
   -o /etc/vps-bootstrap/ports.conf
+  
+curl -fsSL --connect-timeout 10 --max-time 30 \
+  "${REPO_URL}/configs/config.conf" \
+  -o /etc/vps-bootstrap/config.conf
 
 install_tool() {
   local name="$1"
@@ -146,6 +150,8 @@ install_tool vps-check
 install_tool vps-reload-fw
 install_tool vps-open-port
 install_tool vps-close-port
+install_tool vps-version
+install_tool vps-self-update
 
 vps-reload-fw
 
