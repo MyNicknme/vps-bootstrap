@@ -15,11 +15,9 @@ fi
 
 echo "==> VPS Bootstrap started"
 
-echo "==> Updating system"
 apt update
 DEBIAN_FRONTEND=noninteractive apt -y upgrade
 
-echo "==> Installing packages"
 apt install -y \
   curl wget git nano vim htop ncdu unzip zip tar \
   ca-certificates gnupg lsb-release \
@@ -27,10 +25,8 @@ apt install -y \
   traceroute mtr-tiny dnsutils net-tools iproute2 \
   jq qrencode
 
-echo "==> Enabling nftables"
-systemctl enable --now nftables
+echo "==> Configuring nftables"
 
-echo "==> Writing nftables firewall"
 cat > /etc/nftables.conf <<EOF
 #!/usr/sbin/nft -f
 
@@ -42,7 +38,6 @@ table inet filter {
         policy drop;
 
         iif "lo" accept
-
         ct state established,related accept
         ct state invalid drop
 
@@ -50,17 +45,9 @@ table inet filter {
         ip6 nexthdr ipv6-icmp accept
 
         tcp dport ${SSH_PORT} accept
-
-        # 3x-ui panel / custom TCP port
         tcp dport ${ALLOW_3XUI_PORT} accept
-
-        # Hysteria2
         udp dport ${ALLOW_HY2_PORT} accept
-
-        # AmneziaWG / WireGuard
         udp dport ${ALLOW_AWG_PORT} accept
-
-        # HTTP/HTTPS for certificates, panels, fallback sites
         tcp dport { 80, 443 } accept
 
         counter drop
@@ -79,9 +66,11 @@ table inet filter {
 EOF
 
 nft -f /etc/nftables.conf
+systemctl enable --now nftables
 systemctl restart nftables
 
 echo "==> Configuring Fail2Ban"
+
 cat > /etc/fail2ban/jail.local <<EOF
 [DEFAULT]
 bantime = 1h
@@ -103,6 +92,7 @@ systemctl enable --now fail2ban
 systemctl restart fail2ban
 
 echo "==> Applying sysctl tuning"
+
 cat > /etc/sysctl.d/99-vps-bootstrap.conf <<EOF
 net.ipv4.ip_forward = 1
 net.ipv6.conf.all.forwarding = 1
@@ -126,15 +116,22 @@ EOF
 sysctl --system >/dev/null
 
 echo "==> Installing VPS Toolkit commands"
-curl -fsSL "${REPO_URL}/scripts/vps-status" -o /usr/local/bin/vps-status
-chmod +x /usr/local/bin/vps-status
 
-echo "==> VPS Bootstrap completed"
+curl -fsSL "${REPO_URL}/scripts/vps-status" -o /usr/local/bin/vps-status
+curl -fsSL "${REPO_URL}/scripts/vps-update" -o /usr/local/bin/vps-update
+
+chmod +x /usr/local/bin/vps-status
+chmod +x /usr/local/bin/vps-update
+
 echo
-echo "SSH port              : ${SSH_PORT}/tcp"
-echo "3x-ui port            : ${ALLOW_3XUI_PORT}/tcp"
-echo "Hysteria2 port        : ${ALLOW_HY2_PORT}/udp"
-echo "AmneziaWG/WireGuard   : ${ALLOW_AWG_PORT}/udp"
+echo "========================================="
+echo " VPS Bootstrap completed"
+echo "========================================="
+echo "SSH port            : ${SSH_PORT}/tcp"
+echo "3x-ui port          : ${ALLOW_3XUI_PORT}/tcp"
+echo "Hysteria2 port      : ${ALLOW_HY2_PORT}/udp"
+echo "AmneziaWG/WG port   : ${ALLOW_AWG_PORT}/udp"
 echo
-echo "Check server status:"
+echo "Check status:"
 echo "  vps-status"
+echo
