@@ -117,13 +117,25 @@ sysctl --system >/dev/null
 
 echo "==> Installing VPS Toolkit commands"
 
-curl -fsSL "${REPO_URL}/scripts/vps-status" -o /usr/local/bin/vps-status
-curl -fsSL "${REPO_URL}/scripts/vps-update" -o /usr/local/bin/vps-update
-curl -fsSL "${REPO_URL}/scripts/vps-check" -o /usr/local/bin/vps-check
+install_tool() {
+  local name="$1"
+  local url="${REPO_URL}/scripts/${name}"
 
-chmod +x /usr/local/bin/vps-status
-chmod +x /usr/local/bin/vps-update
-chmod +x /usr/local/bin/vps-check
+  echo "Downloading ${name}..."
+
+  if curl -fsSL --connect-timeout 10 --max-time 30 "$url" -o "/usr/local/bin/${name}"; then
+    chmod +x "/usr/local/bin/${name}"
+    echo "Installed ${name}"
+  else
+    echo "ERROR: failed to download ${name}"
+    echo "Check URL: $url"
+    exit 1
+  fi
+}
+
+install_tool vps-status
+install_tool vps-update
+install_tool vps-check
 
 echo
 echo "========================================="
