@@ -8,6 +8,36 @@ ALLOW_3XUI_PORT="${ALLOW_3XUI_PORT:-2053}"
 ALLOW_HY2_PORT="${ALLOW_HY2_PORT:-443}"
 ALLOW_AWG_PORT="${ALLOW_AWG_PORT:-59567}"
 
+download_file() {
+  local url="$1"
+  local out="$2"
+
+  for i in 1 2 3 4 5; do
+    echo "Downloading: $url"
+
+    if curl -fsSL --connect-timeout 10 --max-time 60 "$url" -o "$out"; then
+      return 0
+    fi
+
+    echo "Download failed. Retry $i/5..."
+    sleep $((i * 5))
+  done
+
+  echo "ERROR: failed to download after retries:"
+  echo "$url"
+  exit 1
+}
+
+install_tool() {
+  local name="$1"
+  local url="${REPO_URL}/scripts/${name}"
+
+  echo "Installing ${name}..."
+  download_file "$url" "/usr/local/bin/${name}"
+  chmod +x "/usr/local/bin/${name}"
+  echo "Installed ${name}"
+}
+
 if [[ $EUID -ne 0 ]]; then
   echo "Run as root"
   exit 1
@@ -119,29 +149,8 @@ echo "==> Installing VPS Toolkit"
 
 mkdir -p /etc/vps-bootstrap
 
-curl -fsSL --connect-timeout 10 --max-time 30 \
-  "${REPO_URL}/configs/ports.conf" \
-  -o /etc/vps-bootstrap/ports.conf
-  
-curl -fsSL --connect-timeout 10 --max-time 30 \
-  "${REPO_URL}/configs/config.conf" \
-  -o /etc/vps-bootstrap/config.conf
-
-install_tool() {
-  local name="$1"
-  local url="${REPO_URL}/scripts/${name}"
-
-  echo "Downloading ${name}..."
-
-  if curl -fsSL --connect-timeout 10 --max-time 30 "$url" -o "/usr/local/bin/${name}"; then
-    chmod +x "/usr/local/bin/${name}"
-    echo "Installed ${name}"
-  else
-    echo "ERROR: failed to download ${name}"
-    echo "Check URL: $url"
-    exit 1
-  fi
-}
+download_file "${REPO_URL}/configs/ports.conf" /etc/vps-bootstrap/ports.conf
+download_file "${REPO_URL}/configs/config.conf" /etc/vps-bootstrap/config.conf
 
 install_tool vps
 install_tool vps-status
@@ -166,6 +175,7 @@ echo "Hysteria2 port      : ${ALLOW_HY2_PORT}/udp"
 echo "AmneziaWG/WG port   : ${ALLOW_AWG_PORT}/udp"
 echo
 echo "Check status:"
-echo "  vps-status"
-echo "  vps-check"
+echo "  vps status"
+echo "  vps check"
+echo "  vps version"
 echo
